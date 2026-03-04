@@ -1,0 +1,255 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions  Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Vendor {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  name         String
+  email        String
+  addressJson  String?
+  status       String    @default("pending")
+  taxId        String?
+  paymentTerms String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  users        VendorUser[]
+  receivingOrders ReceivingOrder[]
+}
+
+model VendorUser {
+  id        String   @id @default(cuid())
+  vendorId  String
+  email     String
+  password  String
+  role      String   @default("viewer")
+  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([vendorId, email])
+  @@index([vendorId])
+}
+
+model Warehouse {
+  id            String    @id @default(cuid())
+  code         String    @unique
+  name         String
+  addressJson   String
+  status       String    @default("active")
+  timezone     String    @default("UTC")
+  capacityJson  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  zones        WarehouseZone[]
+  inventory    InventoryItem[]
+  receivingOrders ReceivingOrder[]
+  shipmentOrders ShipmentOrder[]
+}
+
+model WarehouseZone {
+  id          String   @id @default(cuid())
+  warehouseId String
+  code        String
+  name        String
+  type        String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, code])
+  @@index([warehouseId])
+}
+
+model InventoryItem {
+  id              String   @id @default(cuid())
+  warehouseId     String
+  zoneId          String?
+  sku             String
+  quantity        Int      @default(0)
+  reservedQuantity Int     @default(0)
+  unit            String   @default("EA")
+  locationCode    String?
+  lotNumber       String?
+  expiryDate      DateTime?
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  updatedAt       DateTime @updatedAt
+
+  @@unique([warehouseId, sku, lotNumber])
+  @@index([warehouseId])
+  @@index([sku])
+}
+
+model ReceivingOrder {
+  id              String   @id @default(cuid())
+  warehouseId     String
+  vendorId        String
+  purchaseOrderId String?
+  status          String   @default("draft")
+  expectedAt      DateTime?
+  receivedAt      DateTime?
+  linesJson       String
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([warehouseId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+model ShipmentOrder {
+  id              String   @id @default(cuid())
+  warehouseId     String
+  orderReference  String
+  status          String   @default("draft")
+  carrierId       String?
+  trackingNumber  String?
+  linesJson       String
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([warehouseId])
+  @@index([status])
+  @@index([trackingNumber])
+}
+
+model Carrier {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  type          String
+  integrationId String
+  isActive      Boolean  @default(true)
+  configJson    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  shipments     Shipment[]
+}
+
+model Shipment {
+  id                 String    @id @default(cuid())
+  externalId         String?   @unique
+  carrierId          String
+  trackingNumber     String    @unique
+  status             String    @default("created")
+  originJson         String
+  destinationJson    String
+  parcelsJson        String
+  reference          String?
+  estimatedDelivery  DateTime?
+  actualDelivery     DateTime?
+  carrier            Carrier   @relation(fields: [carrierId], references: [id])
+  events             ShipmentEvent[]
+  customsDeclaration CustomsDeclaration?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([carrierId])
+  @@index([status])
+  @@index([trackingNumber])
+}
+
+model ShipmentEvent {
+  id          String   @id @default(cuid())
+  shipmentId  String
+  status      String
+  description String
+  location    String?
+  occurredAt  DateTime
+  rawJson     String?
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([occurredAt])
+}
+
+model Route {
+  id                    String   @id @default(cuid())
+  carrierId             String?
+  driverId              String?
+  vehicleId             String?
+  waypointsJson         String
+  totalDistanceKm       Float
+  totalDurationMinutes  Int
+  estimatedStart        DateTime
+  estimatedEnd          DateTime
+  status                String   @default("planned")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([status])
+  @@index([estimatedStart])
+}
+
+model CustomsDeclaration {
+  id              String    @id @default(cuid())
+  shipmentId      String    @unique
+  countryOfExport String
+  countryOfImport String
+  incoterm        String
+  itemsJson       String
+  status          String    @default("pending")
+  submittedAt     DateTime?
+  clearedAt      DateTime?
+  shipment        Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  documents       ComplianceDocument[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([countryOfImport])
+}
+
+model ComplianceDocument {
+  id           String             @id @default(cuid())
+  declarationId String
+  type         String
+  name         String
+  url          String
+  status       String             @default("pending")
+  uploadedAt   DateTime           @default(now())
+  reviewedAt   DateTime?
+  declaration  CustomsDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+
+  @@index([declarationId])
+}
+
+model ComplianceRule {
+  id                String   @id @default(cuid())
+  name              String
+  countryCode       String
+  type              String
+  conditionsJson    String?
+  requiredDocuments String
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([countryCode])
+  @@index([isActive])
+}

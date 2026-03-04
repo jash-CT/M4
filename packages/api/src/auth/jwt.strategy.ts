@@ -1,0 +1,41 @@
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
+
+export interface JwtPayload {
+  sub: string;
+  email: string;
+  type?: 'vendor';
+  vendorId?: string;
+}
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor(
+    config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: config.get<string>('JWT_SECRET', 'change-me-in-production'),
+    });
+  }
+
+  async validate(payload: JwtPayload) {
+    if (payload.type === 'vendor') {
+      const vu = await this.prisma.vendorUser.findUnique({
+        where: { id: payload.sub },
+        include: { vendor: true },
+      });
+      if (!vu || vu.vendor.status !== 'active')
+        throw new UnauthorizedException();
+      return { id: vu.id, email: vu.email, vendorId: vu.vendorId, vendor: vu.vendor, type: 'vendor' as const };
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user) throw new UnauthorizedException();
+    return { id: user.id, email: user.email, role: user.role, type: 'user' as const };
+  }
+}

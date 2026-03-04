@@ -1,0 +1,25 @@
+{
+  "name": "logistics-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Logistics and supply-chain platform: warehouse, carriers, routing, compliance, tracking, vendor portals",
+  "workspaces": [
+    "packages/api",
+    "packages/web",
+    "packages/shared"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev --workspace=packages/api & npm run dev --workspace=packages/web",
+    "dev:api": "npm run dev --workspace=packages/api",
+    "dev:web": "npm run dev --workspace=packages/web",
+    "db:generate": "npm run db:generate --workspace=packages/api",
+    "db:migrate": "npm run db:migrate --workspace=packages/api",
+    "db:seed": "npm run db:seed --workspace=packages/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

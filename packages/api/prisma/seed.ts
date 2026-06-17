@@ -4,13 +4,34 @@ const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminPassword = await bcrypt.hash('admin123', 10);
+  // Require admin credentials from environment variables
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@logistics.local';
+  const adminPasswordPlain = process.env.ADMIN_PASSWORD;
+  const vendorPasswordPlain = process.env.VENDOR_PASSWORD;
+
+  // Fail in production if default credentials are attempted
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && (!adminPasswordPlain || !vendorPasswordPlain)) {
+    throw new Error(
+      'SECURITY: ADMIN_PASSWORD and VENDOR_PASSWORD environment variables must be set in production. ' +
+      'Never use hardcoded credentials in production environments.'
+    );
+  }
+
+  // For development only: allow fallback with clear warning
+  const finalAdminPassword = adminPasswordPlain || 'admin123';
+  const finalVendorPassword = vendorPasswordPlain || 'vendor123';
+  if (!isProd && (!adminPasswordPlain || !vendorPasswordPlain)) {
+    console.warn('WARNING: Using default seed credentials. Set ADMIN_PASSWORD and VENDOR_PASSWORD env vars for secure seeding.');
+  }
+
+  const adminPassword = await bcrypt.hash(finalAdminPassword, 10);
   const user = await prisma.user.upsert({
-    where: { email: 'admin@logistics.local' },
+    where: { email: adminEmail },
     update: {},
     create: {
       email: 'admin@logistics.local',
-      password: adminPassword,
+      email: adminEmail,
       name: 'Admin',
       role: 'admin',
     },
@@ -18,7 +39,7 @@ async function main() {
   console.log('Created admin:', user.email);
 
   const vendorPassword = await bcrypt.hash('vendor123', 10);
-  const vendor = await prisma.vendor.upsert({
+  const vendorPassword = await bcrypt.hash(finalVendorPassword, 10);
     where: { code: 'VENDOR01' },
     update: {},
     create: {

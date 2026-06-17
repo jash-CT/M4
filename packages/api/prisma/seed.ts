@@ -1,10 +1,25 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
 const prisma = new PrismaClient();
 
+function generateSecurePassword(length = 32) {
+  return crypto.randomBytes(length).toString('base64').slice(0, length);
+}
+
 async function main() {
-  const adminPassword = await bcrypt.hash('admin123', 10);
+  // Prevent seed from running in production
+  if (process.env.NODE_ENV === 'production') {
+    console.error('ERROR: Seed script cannot run in production environment.');
+    console.error('Use secure credential provisioning for production deployments.');
+    process.exit(1);
+  }
+
+  // Generate random admin password from environment or create secure random
+  const adminPasswordPlain = process.env.SEED_ADMIN_PASSWORD || generateSecurePassword();
+  const adminPassword = await bcrypt.hash(adminPasswordPlain, 10);
+  
   const user = await prisma.user.upsert({
     where: { email: 'admin@logistics.local' },
     update: {},
@@ -15,9 +30,21 @@ async function main() {
       role: 'admin',
     },
   });
-  console.log('Created admin:', user.email);
+  
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.log('========================================');
+    console.log('GENERATED ADMIN CREDENTIALS (SAVE SECURELY):');
+    console.log('Email:', user.email);
+    console.log('Password:', adminPasswordPlain);
+    console.log('========================================');
+  } else {
+    console.log('Created admin:', user.email, '(password from SEED_ADMIN_PASSWORD)');
+  }
 
-  const vendorPassword = await bcrypt.hash('vendor123', 10);
+  // Generate random vendor password from environment or create secure random
+  const vendorPasswordPlain = process.env.SEED_VENDOR_PASSWORD || generateSecurePassword();
+  const vendorPassword = await bcrypt.hash(vendorPasswordPlain, 10);
+  
   const vendor = await prisma.vendor.upsert({
     where: { code: 'VENDOR01' },
     update: {},
@@ -46,7 +73,17 @@ async function main() {
       role: 'admin',
     },
   });
-  console.log('Created vendor:', vendor.code, 'user:', vendorUser.email);
+  
+  if (!process.env.SEED_VENDOR_PASSWORD) {
+    console.log('========================================');
+    console.log('GENERATED VENDOR CREDENTIALS (SAVE SECURELY):');
+    console.log('Vendor:', vendor.code);
+    console.log('Email:', vendorUser.email);
+    console.log('Password:', vendorPasswordPlain);
+    console.log('========================================');
+  } else {
+    console.log('Created vendor:', vendor.code, 'user:', vendorUser.email, '(password from SEED_VENDOR_PASSWORD)');
+  }
 
   const warehouse = await prisma.warehouse.upsert({
     where: { code: 'WH01' },

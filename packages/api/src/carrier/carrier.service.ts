@@ -47,16 +47,26 @@ export class CarrierService {
 
   async getRates(carrierId: string, request: RateRequest) {
     const carrier = await this.get(carrierId);
+    if (!this.adapters.has(carrier.integrationId)) {
+      throw new BadRequestException(`Carrier integration ${carrier.integrationId} not available`);
+    }
     const adapter = this.adapters.get(carrier.integrationId);
-    if (!adapter) throw new BadRequestException(`Carrier integration ${carrier.integrationId} not available`);
+    if (!adapter) {
+      throw new BadRequestException(`Carrier integration ${carrier.integrationId} not available`);
+    }
     const rates = await adapter.getRates(request);
     return rates.map((r) => ({ ...r, carrierId }));
   }
 
   async createShipment(carrierId: string, request: CreateShipmentRequest) {
     const carrier = await this.get(carrierId);
+    if (!this.adapters.has(carrier.integrationId)) {
+      throw new BadRequestException(`Carrier integration ${carrier.integrationId} not available`);
+    }
     const adapter = this.adapters.get(carrier.integrationId);
-    if (!adapter) throw new BadRequestException(`Carrier integration ${carrier.integrationId} not available`);
+    if (!adapter) {
+      throw new BadRequestException(`Carrier integration ${carrier.integrationId} not available`);
+    }
     const result = await adapter.createShipment(request);
     await this.prisma.shipment.create({
       data: {

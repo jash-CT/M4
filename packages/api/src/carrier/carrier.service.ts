@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CarrierAdapterRegistry } from './carrier-adapter.registry';
+import { ForbiddenException } from '@nestjs/common';
 import type { RateRequest, CreateShipmentRequest } from '@logistics/shared';
 
 @Injectable()
@@ -29,9 +30,14 @@ export class CarrierService {
     );
   }
 
-  async get(id: string) {
+  async get(id: string, userRole?: string) {
     const c = await this.prisma.carrier.findUnique({ where: { id } });
     if (!c) throw new NotFoundException('Carrier not found');
+    
+    if (userRole && !['admin', 'logistics_manager'].includes(userRole)) {
+      throw new ForbiddenException('Insufficient permissions to access carrier details');
+    }
+    
     return {
       id: c.id,
       code: c.code,
@@ -45,8 +51,13 @@ export class CarrierService {
     };
   }
 
-  async getRates(carrierId: string, request: RateRequest) {
-    const carrier = await this.get(carrierId);
+  async getRates(carrierId: string, request: RateRequest, userRole?: string) {
+    if (!userRole || !['admin', 'logistics_manager'].includes(userRole)) {
+      throw new ForbiddenException('Insufficient permissions to query carrier rates');
+    }
+    
+    const carrier = await this.get(carrierId, userRole);
+    
     const adapter = this.adapters.get(carrier.integrationId);
     if (!adapter) throw new BadRequestException(`Carrier integration ${carrier.integrationId} not available`);
     const rates = await adapter.getRates(request);
@@ -54,8 +65,13 @@ export class CarrierService {
   }
 
   async createShipment(carrierId: string, request: CreateShipmentRequest) {
-    const carrier = await this.get(carrierId);
-    const adapter = this.adapters.get(carrier.integrationId);
+  async createShipment(carrierId: string, request: CreateShipmentRequest, userRole?: string) {
+    if (!userRole || !['admin', 'logistics_manager'].includes(userRole)) {
+      throw new ForbiddenException('Insufficient permissions to create carrier shipments');
+    }
+    
+    const carrier = await this.get(carrierId, userRole);
+    
     if (!adapter) throw new BadRequestException(`Carrier integration ${carrier.integrationId} not available`);
     const result = await adapter.createShipment(request);
     await this.prisma.shipment.create({

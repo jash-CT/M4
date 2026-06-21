@@ -22,7 +22,17 @@ export class ComplianceService {
     }));
   }
 
-  async getDeclarationByShipment(shipmentId: string) {
+  async getDeclarationByShipment(shipmentId: string, userId: string) {
+    // Verify shipment ownership before accessing declaration
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      select: { id: true, userId: true },
+    });
+    if (!shipment) throw new NotFoundException('Shipment not found');
+    if (shipment.userId !== userId) {
+      throw new ForbiddenException('Access denied: you do not own this shipment');
+    }
+
     const d = await this.prisma.customsDeclaration.findUnique({
       where: { shipmentId },
       include: { documents: true },
